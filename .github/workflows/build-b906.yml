@@ -175,6 +175,47 @@ jobs:
           grep -n "b906_fixed_size_llseek" $F | head -5
           rm -f helper_vt.c patch_vt.py
 
+      - name: Patch vt.c (take_over_console wrapper missing)
+        working-directory: kernel
+        run: |
+          set -euo pipefail
+          F=drivers/tty/vt/vt.c
+          [ -f "$F" ] || { echo "no vt.c, skip"; exit 0; }
+          if grep -q "^int take_over_console" "$F"; then echo "already patched"; exit 0; fi
+
+          cat > wrap_toc.c <<'EOF_WRAP'
+
+          /*
+           * this tree dropped the locking wrapper (VT was disabled); fbcon.c still calls it
+           */
+          int take_over_console(const struct consw *csw, int first, int last, int deflt)
+          {
+              int err;
+
+              console_lock();
+              err = do_take_over_console(csw, first, last, deflt);
+              console_unlock();
+
+              return err;
+          }
+          EXPORT_SYMBOL(take_over_console);
+          EOF_WRAP
+
+          cat > patch_vt2.py <<'EOF_PY'
+          path = "drivers/tty/vt/vt.c"
+          src = open(path).read()
+          marker = "EXPORT_SYMBOL_GPL(do_take_over_console);"
+          idx = src.find(marker)
+          assert idx > 0
+          ins = open("wrap_toc.c").read()
+          src = src[:idx + len(marker)] + ins + src[idx + len(marker):]
+          open(path, "w").write(src)
+          print("patched", path)
+          EOF_PY
+
+          python3 patch_vt2.py
+          grep -n "^int take_over_console" $F
+          rm -f patch_vt2.py wrap_toc.c
       - name: Configure (.config)
         working-directory: kernel
         run: |
@@ -183,6 +224,8 @@ jobs:
           export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/arm-eabi-
           make ARCH=arm CROSS_COMPILE=$CROSS_COMPILE b906_defconfig 2>&1 | tail -12
           echo "==== key config ===="
+          echo "==== console flags ===="
+          grep -E '^CONFIG_VT|^CONFIG_HW_CONSOLE|^CONFIG_FRAMEBUFFER_CONSOLE|^CONFIG_FONT_8x16' .config
           grep -E 'CONFIG_ANDROID_BINDER_DEVICES|CONFIG_CUSTOM_KERNEL_LCM|CONFIG_LCM_WIDTH|CONFIG_LCM_HEIGHT' .config
 
       - name: Build zImage
