@@ -8,6 +8,10 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [fbcon, nofb]
 
     steps:
       - name: Checkout upstream kernel (lineage-15.1)
@@ -121,8 +125,62 @@ jobs:
           set_config CONFIG_FONTS y
           set_config CONFIG_FONT_8x16 y
           set_config CONFIG_LOGO n
+          if [ "${{ matrix.variant }}" = "nofb" ]; then
+            set_config CONFIG_MTK_FB n
+            echo "(nofb) 已关闭 MTK framebuffer 驱动"
+          fi
           echo "==== console config ===="
-          grep -E "CONFIG_VT=|CONFIG_FRAMEBUFFER_CONSOLE|CONFIG_FONT_8x16|CONFIG_DUMMY_CONSOLE" $C/b906_defconfig
+          grep -E "CONFIG_VT=|CONFIG_FRAMEBUFFER_CONSOLE|CONFIG_FONT_8x16|CONFIG_DUMMY_CONSOLE|CONFIG_MTK_FB=" $C/b906_defconfig
+
+      - name: Patch vc_screen for VT (fixed_size_llseek missing in this tree)
+        working-directory: kernel
+        run: |
+          set -euo pipefail
+          F=drivers/tty/vt/vc_screen.c
+          if [ ! -f "$F" ]; then echo "no vc_screen.c, skip"; exit 0; fi
+          if grep -q b906_fixed_size_llseek "$F"; then echo "already patched"; exit 0; fi
+
+          cat > helper_vt.c <<'EOF_HELPER'
+          /* this kernel tree removed fixed_size_llseek (unused while VT disabled) */
+          static loff_t b906_fixed_size_llseek(struct file *file, loff_t offset, int whence, loff_t size)
+          {
+              switch (whence) {
+              case SEEK_SET:
+                  break;
+              case SEEK_CUR:
+                  offset += file->f_pos;
+                  break;
+              case SEEK_END:
+                  offset += size;
+                  break;
+              default:
+                  return -EINVAL;
+              }
+              if (offset < 0 || offset > size)
+                  return -EINVAL;
+              file->f_pos = offset;
+              return file->f_pos;
+          }
+
+          EOF_HELPER
+
+          cat > patch_vt.py <<'EOF_PY'
+          import re, sys
+          path = "drivers/tty/vt/vc_screen.c"
+          src = open(path).read()
+          helper = open("helper_vt.c").read()
+          src = src.replace("fixed_size_llseek(", "b906_fixed_size_llseek(")
+          idx = 0
+          for m in re.finditer(r"^#include .*$", src, re.M):
+              idx = m.end()
+          src = src[:idx] + chr(10) + helper + src[idx:]
+          open(path, "w").write(src)
+          print("patched", path)
+          EOF_PY
+
+          python3 patch_vt.py
+          grep -n "b906_fixed_size_llseek" $F | head -5
+          rm -f helper_vt.c patch_vt.py
 
       - name: Configure (.config)
         working-directory: kernel
@@ -161,7 +219,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: b906-zImage
+          name: b906-zImage-${{ matrix.variant }}
           path: |
             kernel/arch/arm/boot/zImage
             kernel/.config
