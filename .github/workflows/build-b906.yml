@@ -102,6 +102,28 @@ jobs:
           grep -q '^CONFIG_ANDROID_BINDER_DEVICES=' $C/b906_defconfig || echo 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' >> $C/b906_defconfig
           grep -q '^CONFIG_ANDROID_BINDER_IPC=y' $C/b906_defconfig || echo 'CONFIG_ANDROID_BINDER_IPC=y' >> $C/b906_defconfig
 
+          # ---- 诊断用：把内核日志打到屏幕上（framebuffer console）----
+          set_config() {
+            key=$1; val=$2
+            if grep -q "^$key=" $C/b906_defconfig; then
+              sed -i "s|^$key=.*|$key=$val|" $C/b906_defconfig
+            elif grep -q "^# $key is not set" $C/b906_defconfig; then
+              sed -i "s|^# $key is not set|$key=$val|" $C/b906_defconfig
+            else
+              echo "$key=$val" >> $C/b906_defconfig
+            fi
+          }
+          set_config CONFIG_VT y
+          set_config CONFIG_VT_CONSOLE y
+          set_config CONFIG_DUMMY_CONSOLE y
+          set_config CONFIG_FRAMEBUFFER_CONSOLE y
+          set_config CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY y
+          set_config CONFIG_FONTS y
+          set_config CONFIG_FONT_8x16 y
+          set_config CONFIG_LOGO n
+          echo "==== console config ===="
+          grep -E "CONFIG_VT=|CONFIG_FRAMEBUFFER_CONSOLE|CONFIG_FONT_8x16|CONFIG_DUMMY_CONSOLE" $C/b906_defconfig
+
       - name: Configure (.config)
         working-directory: kernel
         run: |
