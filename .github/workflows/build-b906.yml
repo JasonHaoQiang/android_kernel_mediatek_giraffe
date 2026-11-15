@@ -8,10 +8,6 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [fbcon, nofb]
 
     steps:
       - name: Checkout upstream kernel (lineage-15.1)
@@ -118,6 +114,7 @@ jobs:
             fi
           }
           set_config CONFIG_VT y
+          set_config CONFIG_VT_HW_CONSOLE_BINDING y
           set_config CONFIG_VT_CONSOLE y
           set_config CONFIG_DUMMY_CONSOLE y
           set_config CONFIG_FRAMEBUFFER_CONSOLE y
@@ -125,12 +122,8 @@ jobs:
           set_config CONFIG_FONTS y
           set_config CONFIG_FONT_8x16 y
           set_config CONFIG_LOGO n
-          if [ "${{ matrix.variant }}" = "nofb" ]; then
-            set_config CONFIG_MTK_FB n
-            echo "(nofb) 已关闭 MTK framebuffer 驱动"
-          fi
           echo "==== console config ===="
-          grep -E "CONFIG_VT=|CONFIG_FRAMEBUFFER_CONSOLE|CONFIG_FONT_8x16|CONFIG_DUMMY_CONSOLE|CONFIG_MTK_FB=" $C/b906_defconfig
+          grep -E "CONFIG_VT=|CONFIG_VT_HW_CONSOLE_BINDING|CONFIG_FRAMEBUFFER_CONSOLE|CONFIG_FONT_8x16|CONFIG_DUMMY_CONSOLE" $C/b906_defconfig
 
       - name: Patch vc_screen for VT (fixed_size_llseek missing in this tree)
         working-directory: kernel
@@ -219,7 +212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: b906-zImage-${{ matrix.variant }}
+          name: b906-zImage
           path: |
             kernel/arch/arm/boot/zImage
             kernel/.config
