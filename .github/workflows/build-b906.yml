@@ -112,23 +112,13 @@ jobs:
           echo "==== key config ===="
           grep -E 'CONFIG_ANDROID_BINDER_DEVICES|CONFIG_CUSTOM_KERNEL_LCM|CONFIG_LCM_WIDTH|CONFIG_LCM_HEIGHT' .config
 
-      - name: Fast check - compile lcm dir only
-        working-directory: kernel
-        run: |
-          set -o pipefail
-          export ARCH=arm
-          export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/arm-eabi-
-          make ARCH=arm CROSS_COMPILE=$CROSS_COMPILE \
-               arch/arm/mach-mt6582/alps/lcm/built-in.o 2>&1 | tail -60
-          echo "LCM DIR COMPILED OK"
-
       - name: Build zImage
         working-directory: kernel
         run: |
           set -o pipefail
           export ARCH=arm
           export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/arm-eabi-
-          make -j$(nproc) ARCH=arm CROSS_COMPILE=$CROSS_COMPILE zImage KCFLAGS=-Wno-error 2>&1 | tee ../build.log | tail -150
+          make -k -j$(nproc) ARCH=arm CROSS_COMPILE=$CROSS_COMPILE zImage KCFLAGS=-Wno-error 2>&1 | tee ../build.log | tail -200
 
       - name: Result
         if: always()
@@ -137,7 +127,12 @@ jobs:
             echo "OK zImage"; ls -l kernel/arch/arm/boot/zImage
           else
             echo "zImage NOT generated"
-            [ -f build.log ] && tail -60 build.log || true
+            if [ -f build.log ]; then
+              echo "========== ERROR SUMMARY =========="
+              grep -nE "error:|Error [0-9]+|No rule to make" build.log | head -40 || true
+              echo "========== TAIL =========="
+              tail -40 build.log
+            fi
           fi
 
       - name: Upload artifacts
