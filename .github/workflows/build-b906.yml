@@ -281,6 +281,16 @@ jobs:
           L.append("}")
           L.append("__setup(" + chr(34) + "noinit=" + chr(34) + ", b906_noinit_setup);")
           L.append("")
+          L.append("static int b906_noinit_level = -1;")
+          L.append("")
+          L.append("static int __init b906_noinit_level_setup(char *str)")
+          L.append("{")
+          L.append(T + "if (str)")
+          L.append(T + T + "b906_noinit_level = simple_strtoul(str, NULL, 0);")
+          L.append(T + "return 1;")
+          L.append("}")
+          L.append("__setup(" + chr(34) + "noinit_level=" + chr(34) + ", b906_noinit_level_setup);")
+          L.append("")
           L.append("static int __init b906_initcall_skip(initcall_t fn)")
           L.append("{")
           L.append(T + "char name[96];")
@@ -312,7 +322,8 @@ jobs:
           idx = idx + len(anchor)
           src = src[:idx] + NL + hook + src[idx:]
           old = "for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)" + NL + T + T + "do_one_initcall(*fn);"
-          new = ("for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {" + NL
+          new = ("if (level == b906_noinit_level)" + NL + T + T + "return;" + NL
+                 + T + "for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {" + NL
                  + T + T + "if (b906_initcall_skip(*fn))" + NL
                  + T + T + T + "continue;" + NL
                  + T + T + "do_one_initcall(*fn);" + NL
