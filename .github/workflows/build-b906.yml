@@ -216,6 +216,47 @@ jobs:
           python3 patch_vt2.py
           grep -n "^int take_over_console" $F
           rm -f patch_vt2.py wrap_toc.c
+      - name: Patch mtkfb (cmdline switch to skip display init)
+        working-directory: kernel
+        run: |
+          set -euo pipefail
+          F=drivers/misc/mediatek/video/mtkfb.c
+          [ -f "$F" ] || { echo "no mtkfb.c, skip"; exit 0; }
+          if grep -q b906_mtkfb_off "$F"; then echo "already patched"; exit 0; fi
+
+          cat > patch_fb.py <<'EOF_PY'
+          path = "drivers/misc/mediatek/video/mtkfb.c"
+          src = open(path).read()
+          anchor = "int __init mtkfb_init(void)"
+          idx = src.find(anchor)
+          assert idx > 0
+          hook = '''
+          #include <linux/init.h>
+          #include <linux/string.h>
+
+          static int b906_mtkfb_off;
+          static int __init b906_mtkfb_setup(char *str)
+          {
+              if (str && (str[0] == '0' || str[0] == 'o'))
+                  b906_mtkfb_off = 1;
+              return 1;
+          }
+          __setup("mtkfb=", b906_mtkfb_setup);
+
+          '''
+          src = src[:idx] + hook + src[idx:]
+          old = "int __init mtkfb_init(void)" + chr(10) + "{" + chr(10) + "    int r = 0;"
+          q = chr(34)
+          add = chr(10) + "    if (b906_mtkfb_off) {" + chr(10) + "        printk(KERN_INFO " + q + "b906: display init skipped" + q + ");" + chr(10) + "        return 0;" + chr(10) + "    }"
+          assert old in src
+          src = src.replace(old, old + add, 1)
+          open(path, "w").write(src)
+          print("patched", path)
+          EOF_PY
+
+          python3 patch_fb.py
+          grep -n b906_mtkfb_off $F | head -5
+          rm -f patch_fb.py
       - name: Configure (.config)
         working-directory: kernel
         run: |
