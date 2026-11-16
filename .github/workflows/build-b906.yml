@@ -257,6 +257,75 @@ jobs:
           python3 patch_fb.py
           grep -n b906_mtkfb_off $F | head -5
           rm -f patch_fb.py
+      - name: Patch init/main.c (add noinit= initcall blacklist)
+        working-directory: kernel
+        run: |
+          set -euo pipefail
+          F=init/main.c
+          [ -f "$F" ] || { echo "no main.c, skip"; exit 0; }
+          if grep -q b906_noinit "$F"; then echo "already patched"; exit 0; fi
+
+          cat > patch_init.py <<'EOF_PY'
+          path = "init/main.c"
+          src = open(path).read()
+          T = chr(9)
+          NL = chr(10)
+          L = []
+          L.append("static char b906_noinit[256];")
+          L.append("")
+          L.append("static int __init b906_noinit_setup(char *str)")
+          L.append("{")
+          L.append(T + "if (str)")
+          L.append(T + T + "strlcpy(b906_noinit, str, sizeof(b906_noinit));")
+          L.append(T + "return 1;")
+          L.append("}")
+          L.append("__setup(" + chr(34) + "noinit=" + chr(34) + ", b906_noinit_setup);")
+          L.append("")
+          L.append("static int __init b906_initcall_skip(initcall_t fn)")
+          L.append("{")
+          L.append(T + "char name[96];")
+          L.append(T + "char *p, *tok;")
+          L.append(T + "unsigned long len;")
+          L.append("")
+          L.append(T + "if (!b906_noinit[0])")
+          L.append(T + T + "return 0;")
+          L.append("")
+          L.append(T + "sprint_symbol(name, (unsigned long)fn);")
+          L.append(T + "p = strchr(name, " + chr(39) + "+" + chr(39) + ");")
+          L.append(T + "if (p)")
+          L.append(T + T + "*p = 0;")
+          L.append("")
+          L.append(T + "tok = b906_noinit;")
+          L.append(T + "while (tok && *tok) {")
+          L.append(T + T + "p = strchr(tok, " + chr(39) + "," + chr(39) + ");")
+          L.append(T + T + "len = p ? (unsigned long)(p - tok) : strlen(tok);")
+          L.append(T + T + "if (len && strlen(name) == len && !strncmp(tok, name, len))")
+          L.append(T + T + T + "return 1;")
+          L.append(T + T + "tok = p ? p + 1 : NULL;")
+          L.append(T + "}")
+          L.append(T + "return 0;")
+          L.append("}")
+          hook = NL.join(L) + NL
+          anchor = "static char msgbuf[64];"
+          idx = src.find(anchor)
+          assert idx > 0
+          idx = idx + len(anchor)
+          src = src[:idx] + NL + hook + src[idx:]
+          old = "for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)" + NL + T + T + "do_one_initcall(*fn);"
+          new = ("for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {" + NL
+                 + T + T + "if (b906_initcall_skip(*fn))" + NL
+                 + T + T + T + "continue;" + NL
+                 + T + T + "do_one_initcall(*fn);" + NL
+                 + T + "}")
+          assert old in src
+          src = src.replace(old, new, 1)
+          open(path, "w").write(src)
+          print("patched", path)
+          EOF_PY
+
+          python3 patch_init.py
+          grep -n b906_initcall_skip $F | head -5
+          rm -f patch_init.py
       - name: Configure (.config)
         working-directory: kernel
         run: |
