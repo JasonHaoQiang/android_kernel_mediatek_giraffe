@@ -113,6 +113,8 @@ jobs:
               echo "$key=$val" >> $C/b906_defconfig
             fi
           }
+          set_config CONFIG_DEVTMPFS y
+          set_config CONFIG_DEVTMPFS_MOUNT y
           set_config CONFIG_VT y
           set_config CONFIG_VT_HW_CONSOLE_BINDING y
           set_config CONFIG_VT_CONSOLE y
@@ -373,7 +375,7 @@ jobs:
           make ARCH=arm CROSS_COMPILE=$CROSS_COMPILE b906_defconfig 2>&1 | tail -12
           echo "==== key config ===="
           echo "==== console flags ===="
-          grep -E '^CONFIG_VT|^CONFIG_HW_CONSOLE|^CONFIG_FRAMEBUFFER_CONSOLE|^CONFIG_FONT_8x16' .config
+          grep -E '^CONFIG_VT|^CONFIG_HW_CONSOLE|^CONFIG_FRAMEBUFFER_CONSOLE|^CONFIG_FONT_8x16|^CONFIG_DEVTMPFS' .config
           grep -E 'CONFIG_ANDROID_BINDER_DEVICES|CONFIG_CUSTOM_KERNEL_LCM|CONFIG_LCM_WIDTH|CONFIG_LCM_HEIGHT' .config
 
       - name: Build zImage
