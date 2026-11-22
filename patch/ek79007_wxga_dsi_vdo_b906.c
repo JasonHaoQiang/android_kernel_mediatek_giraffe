@@ -73,8 +73,8 @@
 /*  屏参数                                                                    */
 /* ------------------------------------------------------------------------- */
 
-#define FRAME_WIDTH   (1280)
-#define FRAME_HEIGHT  (800)
+#define FRAME_WIDTH   (720)
+#define FRAME_HEIGHT  (1280)
 
 /* 本驱动私有的表项标记：避开 lcm_drv.h 的同名宏，
  * 保证 0xFF / 0xFE 这两条真实寄存器写不会被当成标记。 */
@@ -82,13 +82,13 @@
 #define B906_REGFLAG_END_TABLE  0xAA    /* = lcm_drv.h 的 REGFLAG_END_OF_TABLE */
 
 /* DSI 时序 */
-#define T_VSYNC   3
-#define T_VBP     10
-#define T_VFP     5
-#define T_HSYNC   20
-#define T_HBP     20
-#define T_HFP     20
-#define T_PLL     200
+#define T_VSYNC   4
+#define T_VBP     16
+#define T_VFP     4
+#define T_HSYNC   40
+#define T_HBP     40
+#define T_HFP     40
+#define T_PLL     210
 
 static LCM_UTIL_FUNCS lcm_util = {0};
 
@@ -196,8 +196,8 @@ static void lcm_get_params(LCM_PARAMS *params)
     params->width  = FRAME_WIDTH;
     params->height = FRAME_HEIGHT;
 
-    params->physical_width  = 163;     /* mm，仅供上报 */
-    params->physical_height = 102;     /* mm */
+    params->physical_width  = 64;     /* mm，仅供上报 */
+    params->physical_height = 114;     /* mm */
 
     params->dsi.mode   = SYNC_EVENT_VDO_MODE;
 
